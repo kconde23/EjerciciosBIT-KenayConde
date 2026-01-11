@@ -2,11 +2,13 @@ import pandas as pd
 import plotly.express as px
 import dash_bootstrap_components as dbc
 from dash import Dash, dcc, html, Input, Output
+import os
 
 # =====================
-# DATA
+# DATA LOADING (RENDER SAFE)
 # =====================
-df = pd.read_csv("deaths-illicit-drugs NEW.csv")
+DATA_PATH = "./deaths-illicit-drugs NEW.csv"
+df = pd.read_csv(DATA_PATH)
 
 df = df.rename(columns={
     "COUNTRY": "country",
@@ -29,15 +31,18 @@ df = df.dropna()
 years = sorted(df["year"].unique())
 countries = sorted(df["country"].unique())
 
+# Safe defaults
+default_countries = countries[:5] if len(countries) >= 5 else countries
+
 # =====================
-# APP
+# APP CONFIG
 # =====================
 app = Dash(
     __name__,
     external_stylesheets=[dbc.themes.DARKLY],
     title="Global Illicit Drug Mortality Analysis"
 )
-server = app.server
+server = app.server  # REQUIRED for Render
 
 # =====================
 # LAYOUT
@@ -45,24 +50,26 @@ server = app.server
 app.layout = dbc.Container(fluid=True, children=[
 
     dbc.Row([
-        html.H1(
-            "Global Illicit Drug Mortality Dashboard",
-            className="text-center my-3"
+        dbc.Col(
+            html.H1(
+                "Global Illicit Drug Mortality Dashboard",
+                className="text-center my-4"
+            )
         )
     ]),
 
     # FILTER CARD
     dbc.Card(className="mb-4", children=[
-        dbc.CardHeader("Analysis Filters"),
+        dbc.CardHeader("Interactive Filters"),
         dbc.CardBody([
 
             dbc.Row([
                 dbc.Col([
-                    html.Label("Country selection"),
+                    html.Label("Countries"),
                     dcc.Dropdown(
                         id="country_selector",
                         options=[{"label": c, "value": c} for c in countries],
-                        value=countries[:5],
+                        value=default_countries,
                         multi=True
                     )
                 ], md=6),
@@ -83,13 +90,13 @@ app.layout = dbc.Container(fluid=True, children=[
 
             dbc.Row([
                 dbc.Col([
-                    html.Label("Year range"),
+                    html.Label("Year Range"),
                     dcc.RangeSlider(
                         id="year_selector",
-                        min=min(years),
-                        max=max(years),
-                        value=[min(years), max(years)],
-                        marks={y: str(y) for y in years[::3]},
+                        min=int(min(years)),
+                        max=int(max(years)),
+                        value=[int(min(years)), int(max(years))],
+                        marks={int(y): str(y) for y in years[::3]},
                         step=1
                     )
                 ])
@@ -97,7 +104,6 @@ app.layout = dbc.Container(fluid=True, children=[
         ])
     ]),
 
-    # VISUALS
     dbc.Row([
         dbc.Col(dcc.Graph(id="trend_graph"), md=12)
     ]),
@@ -106,6 +112,7 @@ app.layout = dbc.Container(fluid=True, children=[
         dbc.Col(dcc.Graph(id="bar_graph"), md=6),
         dbc.Col(dcc.Graph(id="scatter_graph"), md=6)
     ])
+
 ])
 
 # =====================
@@ -121,6 +128,10 @@ app.layout = dbc.Container(fluid=True, children=[
 )
 def update_dashboard(selected_countries, metric, year_range):
 
+    # Safety checks
+    if not selected_countries:
+        selected_countries = default_countries
+
     df_filtered = df[
         (df["country"].isin(selected_countries)) &
         (df["year"] >= year_range[0]) &
@@ -131,7 +142,9 @@ def update_dashboard(selected_countries, metric, year_range):
         empty_fig = px.bar(title="No data for selected filters")
         return empty_fig, empty_fig, empty_fig
 
-    # LINE – trend per year (NON cumulative)
+    # =====================
+    # LINE CHART – Yearly (NON-CUMULATIVE)
+    # =====================
     yearly = (
         df_filtered
         .groupby("year")[metric]
@@ -143,11 +156,13 @@ def update_dashboard(selected_countries, metric, year_range):
         yearly,
         x="year",
         y=metric,
-        title="Yearly Evolution",
-        markers=True
+        markers=True,
+        title="Yearly Evolution (Non-Cumulative)"
     )
 
-    # BAR – top countries in range
+    # =====================
+    # BAR – Top Countries
+    # =====================
     bar_data = (
         df_filtered
         .groupby("country")[metric]
@@ -164,7 +179,9 @@ def update_dashboard(selected_countries, metric, year_range):
         title="Top Countries in Selected Period"
     )
 
-    # SCATTER – rate vs deaths
+    # =====================
+    # SCATTER – Rate vs Deaths
+    # =====================
     scatter_data = (
         df_filtered
         .groupby("country")[["drug_deaths", "death_rate"]]
@@ -177,15 +194,16 @@ def update_dashboard(selected_countries, metric, year_range):
         x="drug_deaths",
         y="death_rate",
         hover_name="country",
-        title="Death Rate vs Total Deaths",
-        size="drug_deaths"
+        size="drug_deaths",
+        title="Death Rate vs Total Deaths"
     )
 
     return fig_trend, fig_bar, fig_scatter
 
 
 # =====================
-# RUN
+# RUN (RENDER SAFE)
 # =====================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8050, debug=True)
+    port = int(os.environ.get("PORT", 8050))
+    app.run(host="0.0.0.0", port=port)
