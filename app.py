@@ -62,12 +62,13 @@ app.layout = dbc.Container(fluid=True, children=[
             dbc.Row([
                 dbc.Col([
                     html.Label("Countries"),
-                    dcc.Dropdown(
-                        id="country_selector",
-                        options=[{"label": c, "value": c} for c in countries],
-                        value=default_countries,
-                        multi=True
-                    )
+                 dcc.Dropdown(
+    id="country_selector",
+    options=[{"label": c, "value": c} for c in countries],
+    value=default_countries,
+    multi=True,
+    style={"color": "black"}
+)
                 ], md=6),
 
                 dbc.Col([
@@ -110,10 +111,7 @@ app.layout = dbc.Container(fluid=True, children=[
     ])
 
 ])
- dcc.Dropdown(
-    ...
-    style={"color": "black"}
-)
+ 
 # =====================
 # CALLBACK
 # =====================
@@ -206,3 +204,4 @@ def update_dashboard(selected_countries, metric, year_range):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
     app.run(host="0.0.0.0", port=port)
+
