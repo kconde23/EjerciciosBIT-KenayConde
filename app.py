@@ -36,9 +36,10 @@ default_countries = countries[:5] if len(countries) >= 5 else countries
 app = Dash(
     __name__,
     external_stylesheets=[dbc.themes.DARKLY],
-    title="Global Illicit Drug Mortality"
+    title="Global Illicit Drug Mortality Analysis"
 )
-server = app.server 
+server = app.server  
+
 # =====================
 # LAYOUT
 # =====================
@@ -53,7 +54,7 @@ app.layout = dbc.Container(fluid=True, children=[
         )
     ]),
 
-    # FILTER CARD
+    
     dbc.Card(className="mb-4", children=[
         dbc.CardHeader("Interactive Filters"),
         dbc.CardBody([
@@ -109,7 +110,10 @@ app.layout = dbc.Container(fluid=True, children=[
     ])
 
 ])
-
+ dcc.Dropdown(
+    ...
+    style={"color": "black"}
+)
 # =====================
 # CALLBACK
 # =====================
@@ -123,7 +127,7 @@ app.layout = dbc.Container(fluid=True, children=[
 )
 def update_dashboard(selected_countries, metric, year_range):
 
-   
+    # Safety checks
     if not selected_countries:
         selected_countries = default_countries
 
@@ -138,7 +142,7 @@ def update_dashboard(selected_countries, metric, year_range):
         return empty_fig, empty_fig, empty_fig
 
     # =====================
-    # LINE CHART – Yearly (NON-CUMULATIVE)
+    # LINE CHART – Yearly Evolution
     # =====================
     yearly = (
         df_filtered
@@ -149,7 +153,7 @@ def update_dashboard(selected_countries, metric, year_range):
 
     fig_trend = px.line(
         yearly,
-        x="Year",
+        x="year",
         y=metric,
         markers=True,
         title="Yearly Evolution"
@@ -169,7 +173,7 @@ def update_dashboard(selected_countries, metric, year_range):
 
     fig_bar = px.bar(
         bar_data,
-        x="Country",
+        x="country",
         y=metric,
         title="Top Countries in Selected Period"
     )
@@ -186,8 +190,8 @@ def update_dashboard(selected_countries, metric, year_range):
 
     fig_scatter = px.scatter(
         scatter_data,
-        x="Drug Deaths",
-        y="Death Rate",
+        x="drug_deaths",
+        y="death_rate",
         hover_name="country",
         size="drug_deaths",
         title="Death Rate vs Total Deaths"
@@ -196,7 +200,9 @@ def update_dashboard(selected_countries, metric, year_range):
     return fig_trend, fig_bar, fig_scatter
 
 
+# =====================
+# RUN (RENDER SAFE)
+# =====================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
     app.run(host="0.0.0.0", port=port)
-
