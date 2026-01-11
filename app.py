@@ -3,6 +3,9 @@ from dash import Dash, dcc, html, Input, Output
 import plotly.express as px
 import dash_bootstrap_components as dbc
 
+# =====================
+# DATA
+# =====================
 df = pd.read_csv("deaths-illicit-drugs NEW.csv")
 
 df = df.rename(columns={
@@ -23,76 +26,98 @@ df["death_rate"] = (
 
 df = df.dropna()
 
-# =====================
-# DASH APP
-# =====================
-app = Dash(__name__)
-server = app.server  # Needed for Render
-
 years = sorted(df["year"].unique())
+
+# =====================
+# APP
+# =====================
+app = Dash(
+    __name__,
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
+    title="Global Illicit Drug Deaths Analysis"
+)
+server = app.server
+
+# =====================
+# PRE-COMPUTE YEARLY DEATHS (NON-CUMULATIVE)
+# =====================
+yearly_deaths = (
+    df.groupby("year")["drug_deaths"]
+    .sum()
+    .reset_index()
+)
 
 # =====================
 # LAYOUT
 # =====================
-app.layout = html.Div(
-    style={"padding": "20px", "fontFamily": "Arial"},
-    children=[
+app.layout = dbc.Container([
 
-        html.H1("Illicit Drug Deaths Dashboard", style={"textAlign": "center"}),
+    html.H1(
+        "Global Illicit Drug Deaths Analysis",
+        className="text-center my-4"
+    ),
 
-        # Year Selector
-        dcc.Slider(
-            id="year-slider",
-            min=min(years),
-            max=max(years),
-            value=max(years),
-            marks={int(y): str(y) for y in years[::2]},
-            step=1
-        ),
+    dcc.Slider(
+        id="year-slider",
+        min=min(years),
+        max=max(years),
+        value=max(years),
+        marks={int(y): str(y) for y in years[::2]},
+        step=1
+    ),
 
-        html.Br(),
+    html.Br(),
 
-        # Charts
-        dcc.Graph(id="line-trend"),
-        dcc.Graph(id="bar-top-countries"),
+    dbc.Row([
+        dbc.Col(dbc.Card(
+            dbc.CardBody([
+                html.H4("Total Deaths (Selected Year)", className="card-title"),
+                html.H2(id="kpi-total", className="text-danger")
+            ])
+        ), width=4)
+    ]),
 
-        html.Div(
-            style={"display": "flex"},
-            children=[
-                dcc.Graph(id="pie-country-share", style={"width": "50%"}),
-                dcc.Graph(id="scatter-rate-vs-deaths", style={"width": "50%"})
-            ]
+    html.Br(),
+
+    dcc.Graph(
+        id="line-trend",
+        figure=px.line(
+            yearly_deaths,
+            x="year",
+            y="drug_deaths",
+            title="Global Drug Deaths Per Year (Non-Cumulative)"
         )
-    ]
-)
+    ),
+
+    dcc.Graph(id="bar-top-countries"),
+
+    dbc.Row([
+        dbc.Col(dcc.Graph(id="pie-country-share"), width=6),
+        dbc.Col(dcc.Graph(id="scatter-rate-vs-deaths"), width=6)
+    ])
+
+], fluid=True)
 
 # =====================
-# CALLBACKS
+# CALLBACK
 # =====================
 @app.callback(
-    Output("line-trend", "figure"),
     Output("bar-top-countries", "figure"),
     Output("pie-country-share", "figure"),
     Output("scatter-rate-vs-deaths", "figure"),
+    Output("kpi-total", "children"),
     Input("year-slider", "value")
 )
 def update_charts(selected_year):
 
-    filtered = df[df["year"] <= selected_year]
+    year_df = df[df["year"] == selected_year]
 
-    # Line chart – Global trend
-    trend = filtered.groupby("year")["drug_deaths"].sum().reset_index()
-    fig_line = px.line(
-        trend,
-        x="year",
-        y="drug_deaths",
-        title="Global Drug Deaths Over Time"
-    )
+    # KPI
+    total_deaths = int(year_df["drug_deaths"].sum())
 
-    # Bar chart – Top 10 countries (selected year)
+    # Bar
     top_countries = (
-        df[df["year"] == selected_year]
-        .groupby("country")["drug_deaths"]
+        year_df.groupby("country")["drug_deaths"]
         .sum()
         .sort_values(ascending=False)
         .head(10)
@@ -106,18 +131,17 @@ def update_charts(selected_year):
         title=f"Top 10 Countries by Drug Deaths ({selected_year})"
     )
 
-    # Pie chart – Country share
+    # Pie
     fig_pie = px.pie(
         top_countries,
         names="country",
         values="drug_deaths",
-        title="Share of Drug Deaths"
+        title="Country Share of Deaths"
     )
 
-    # Scatter plot – Rate vs deaths
+    # Scatter
     scatter_data = (
-        df[df["year"] == selected_year]
-        .groupby("country")[["drug_deaths", "death_rate"]]
+        year_df.groupby("country")[["drug_deaths", "death_rate"]]
         .mean()
         .reset_index()
     )
@@ -130,11 +154,10 @@ def update_charts(selected_year):
         title="Death Rate vs Total Deaths"
     )
 
-    return fig_line, fig_bar, fig_pie, fig_scatter
-
+    return fig_bar, fig_pie, fig_scatter, f"{total_deaths:,}"
 
 # =====================
-# RUN LOCAL
+# RUN
 # =====================
 if __name__ == "__main__":
     app.run(debug=True)
