@@ -4,9 +4,7 @@ import dash_bootstrap_components as dbc
 from dash import Dash, dcc, html, Input, Output
 import os
 
-# =====================
-# DATA LOADING (RENDER SAFE)
-# =====================
+
 DATA_PATH = "./deaths-illicit-drugs NEW.csv"
 df = pd.read_csv(DATA_PATH)
 
@@ -31,19 +29,16 @@ df = df.dropna()
 years = sorted(df["year"].unique())
 countries = sorted(df["country"].unique())
 
-# Safe defaults
+
 default_countries = countries[:5] if len(countries) >= 5 else countries
 
-# =====================
-# APP CONFIG
-# =====================
+
 app = Dash(
     __name__,
     external_stylesheets=[dbc.themes.DARKLY],
-    title="Global Illicit Drug Mortality Analysis"
+    title="Global Illicit Drug Mortality"
 )
-server = app.server  # REQUIRED for Render
-
+server = app.server 
 # =====================
 # LAYOUT
 # =====================
@@ -128,7 +123,7 @@ app.layout = dbc.Container(fluid=True, children=[
 )
 def update_dashboard(selected_countries, metric, year_range):
 
-    # Safety checks
+   
     if not selected_countries:
         selected_countries = default_countries
 
@@ -154,10 +149,10 @@ def update_dashboard(selected_countries, metric, year_range):
 
     fig_trend = px.line(
         yearly,
-        x="year",
+        x="Year",
         y=metric,
         markers=True,
-        title="Yearly Evolution (Non-Cumulative)"
+        title="Yearly Evolution"
     )
 
     # =====================
@@ -174,7 +169,7 @@ def update_dashboard(selected_countries, metric, year_range):
 
     fig_bar = px.bar(
         bar_data,
-        x="country",
+        x="Country",
         y=metric,
         title="Top Countries in Selected Period"
     )
@@ -191,8 +186,8 @@ def update_dashboard(selected_countries, metric, year_range):
 
     fig_scatter = px.scatter(
         scatter_data,
-        x="drug_deaths",
-        y="death_rate",
+        x="Drug Deaths",
+        y="Death Rate",
         hover_name="country",
         size="drug_deaths",
         title="Death Rate vs Total Deaths"
@@ -201,9 +196,7 @@ def update_dashboard(selected_countries, metric, year_range):
     return fig_trend, fig_bar, fig_scatter
 
 
-# =====================
-# RUN (RENDER SAFE)
-# =====================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
     app.run(host="0.0.0.0", port=port)
+
