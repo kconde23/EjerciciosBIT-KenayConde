@@ -29,9 +29,15 @@ df = df.dropna()
 years = sorted(df["year"].unique())
 countries = sorted(df["country"].unique())
 
-
 default_countries = countries[:5] if len(countries) >= 5 else countries
 
+# =====================
+# LABELS (CLEAN AXIS NAMES)
+# =====================
+METRIC_LABELS = {
+    "drug_deaths": "Drug Deaths",
+    "death_rate": "Death Rate"
+}
 
 app = Dash(
     __name__,
@@ -54,7 +60,6 @@ app.layout = dbc.Container(fluid=True, children=[
         )
     ]),
 
-    
     dbc.Card(className="mb-4", children=[
         dbc.CardHeader("Interactive Filters"),
         dbc.CardBody([
@@ -62,13 +67,13 @@ app.layout = dbc.Container(fluid=True, children=[
             dbc.Row([
                 dbc.Col([
                     html.Label("Countries"),
-                 dcc.Dropdown(
-    id="country_selector",
-    options=[{"label": c, "value": c} for c in countries],
-    value=default_countries,
-    multi=True,
-    style={"color": "black"}
-)
+                    dcc.Dropdown(
+                        id="country_selector",
+                        options=[{"label": c, "value": c} for c in countries],
+                        value=default_countries,
+                        multi=True,
+                        style={"color": "black"}
+                    )
                 ], md=6),
 
                 dbc.Col([
@@ -111,7 +116,7 @@ app.layout = dbc.Container(fluid=True, children=[
     ])
 
 ])
- 
+
 # =====================
 # CALLBACK
 # =====================
@@ -125,7 +130,6 @@ app.layout = dbc.Container(fluid=True, children=[
 )
 def update_dashboard(selected_countries, metric, year_range):
 
-    # Safety checks
     if not selected_countries:
         selected_countries = default_countries
 
@@ -140,25 +144,45 @@ def update_dashboard(selected_countries, metric, year_range):
         return empty_fig, empty_fig, empty_fig
 
     # =====================
-    # LINE CHART – Yearly Evolution
+    # LINE CHART – TOTAL + PER COUNTRY
     # =====================
-    yearly = (
+    country_yearly = (
+        df_filtered
+        .groupby(["year", "country"])[metric]
+        .sum()
+        .reset_index()
+    )
+    country_yearly["series"] = country_yearly["country"]
+
+    total_yearly = (
         df_filtered
         .groupby("year")[metric]
         .sum()
         .reset_index()
     )
+    total_yearly["series"] = "Selected Countries (Total)"
+
+    line_data = pd.concat([
+        country_yearly[["year", metric, "series"]],
+        total_yearly[["year", metric, "series"]]
+    ])
 
     fig_trend = px.line(
-        yearly,
+        line_data,
         x="year",
         y=metric,
+        color="series",
         markers=True,
-        title="Yearly Evolution"
+        title="Yearly Evolution by Country and Total",
+        labels={
+            "year": "Year",
+            metric: METRIC_LABELS[metric],
+            "series": "Country / Total"
+        }
     )
 
     # =====================
-    # BAR – Top Countries
+    # BAR CHART
     # =====================
     bar_data = (
         df_filtered
@@ -173,11 +197,15 @@ def update_dashboard(selected_countries, metric, year_range):
         bar_data,
         x="country",
         y=metric,
-        title="Top Countries in Selected Period"
+        title="Top Countries in Selected Period",
+        labels={
+            "country": "Country",
+            metric: METRIC_LABELS[metric]
+        }
     )
 
     # =====================
-    # SCATTER – Rate vs Deaths
+    # SCATTER CHART
     # =====================
     scatter_data = (
         df_filtered
@@ -192,7 +220,11 @@ def update_dashboard(selected_countries, metric, year_range):
         y="death_rate",
         hover_name="country",
         size="drug_deaths",
-        title="Death Rate vs Total Deaths"
+        title="Death Rate vs Total Deaths",
+        labels={
+            "drug_deaths": "Drug Deaths",
+            "death_rate": "Death Rate"
+        }
     )
 
     return fig_trend, fig_bar, fig_scatter
@@ -204,4 +236,3 @@ def update_dashboard(selected_countries, metric, year_range):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
     app.run(host="0.0.0.0", port=port)
-
