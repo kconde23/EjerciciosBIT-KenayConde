@@ -1,7 +1,7 @@
 import pandas as pd
-from dash import Dash, dcc, html, Input, Output
 import plotly.express as px
 import dash_bootstrap_components as dbc
+from dash import Dash, dcc, html, Input, Output
 
 # =====================
 # DATA
@@ -27,97 +27,130 @@ df["death_rate"] = (
 df = df.dropna()
 
 years = sorted(df["year"].unique())
+countries = sorted(df["country"].unique())
 
 # =====================
 # APP
 # =====================
 app = Dash(
     __name__,
-    external_stylesheets=[dbc.themes.BOOTSTRAP],
-    title="Global Illicit Drug Deaths Analysis"
+    external_stylesheets=[dbc.themes.DARKLY],
+    title="Global Illicit Drug Mortality Analysis"
 )
 server = app.server
 
 # =====================
-# PRE-COMPUTE YEARLY DEATHS (NON-CUMULATIVE)
-# =====================
-yearly_deaths = (
-    df.groupby("year")["drug_deaths"]
-    .sum()
-    .reset_index()
-)
-
-# =====================
 # LAYOUT
 # =====================
-app.layout = dbc.Container([
-
-    html.H1(
-        "Global Illicit Drug Deaths Analysis",
-        className="text-center my-4"
-    ),
-
-    dcc.Slider(
-        id="year-slider",
-        min=min(years),
-        max=max(years),
-        value=max(years),
-        marks={int(y): str(y) for y in years[::2]},
-        step=1
-    ),
-
-    html.Br(),
+app.layout = dbc.Container(fluid=True, children=[
 
     dbc.Row([
-        dbc.Col(dbc.Card(
-            dbc.CardBody([
-                html.H4("Total Deaths (Selected Year)", className="card-title"),
-                html.H2(id="kpi-total", className="text-danger")
-            ])
-        ), width=4)
+        html.H1(
+            "Global Illicit Drug Mortality Dashboard",
+            className="text-center my-3"
+        )
     ]),
 
-    html.Br(),
+    # FILTER CARD
+    dbc.Card(className="mb-4", children=[
+        dbc.CardHeader("Analysis Filters"),
+        dbc.CardBody([
 
-    dcc.Graph(
-        id="line-trend",
-        figure=px.line(
-            yearly_deaths,
-            x="year",
-            y="drug_deaths",
-            title="Global Drug Deaths Per Year (Non-Cumulative)"
-        )
-    ),
+            dbc.Row([
+                dbc.Col([
+                    html.Label("Country selection"),
+                    dcc.Dropdown(
+                        id="country_selector",
+                        options=[{"label": c, "value": c} for c in countries],
+                        value=countries[:5],
+                        multi=True
+                    )
+                ], md=6),
 
-    dcc.Graph(id="bar-top-countries"),
+                dbc.Col([
+                    html.Label("Metric"),
+                    dcc.RadioItems(
+                        id="metric_selector",
+                        options=[
+                            {"label": "Total Deaths", "value": "drug_deaths"},
+                            {"label": "Death Rate", "value": "death_rate"}
+                        ],
+                        value="drug_deaths",
+                        inline=True
+                    )
+                ], md=6),
+            ]),
+
+            dbc.Row([
+                dbc.Col([
+                    html.Label("Year range"),
+                    dcc.RangeSlider(
+                        id="year_selector",
+                        min=min(years),
+                        max=max(years),
+                        value=[min(years), max(years)],
+                        marks={y: str(y) for y in years[::3]},
+                        step=1
+                    )
+                ])
+            ])
+        ])
+    ]),
+
+    # VISUALS
+    dbc.Row([
+        dbc.Col(dcc.Graph(id="trend_graph"), md=12)
+    ]),
 
     dbc.Row([
-        dbc.Col(dcc.Graph(id="pie-country-share"), width=6),
-        dbc.Col(dcc.Graph(id="scatter-rate-vs-deaths"), width=6)
+        dbc.Col(dcc.Graph(id="bar_graph"), md=6),
+        dbc.Col(dcc.Graph(id="scatter_graph"), md=6)
     ])
-
-], fluid=True)
+])
 
 # =====================
 # CALLBACK
 # =====================
 @app.callback(
-    Output("bar-top-countries", "figure"),
-    Output("pie-country-share", "figure"),
-    Output("scatter-rate-vs-deaths", "figure"),
-    Output("kpi-total", "children"),
-    Input("year-slider", "value")
+    Output("trend_graph", "figure"),
+    Output("bar_graph", "figure"),
+    Output("scatter_graph", "figure"),
+    Input("country_selector", "value"),
+    Input("metric_selector", "value"),
+    Input("year_selector", "value")
 )
-def update_charts(selected_year):
+def update_dashboard(selected_countries, metric, year_range):
 
-    year_df = df[df["year"] == selected_year]
+    df_filtered = df[
+        (df["country"].isin(selected_countries)) &
+        (df["year"] >= year_range[0]) &
+        (df["year"] <= year_range[1])
+    ]
 
-    # KPI
-    total_deaths = int(year_df["drug_deaths"].sum())
+    if df_filtered.empty:
+        empty_fig = px.bar(title="No data for selected filters")
+        return empty_fig, empty_fig, empty_fig
 
-    # Bar
-    top_countries = (
-        year_df.groupby("country")["drug_deaths"]
+    # LINE – trend per year (NON cumulative)
+    yearly = (
+        df_filtered
+        .groupby("year")[metric]
+        .sum()
+        .reset_index()
+    )
+
+    fig_trend = px.line(
+        yearly,
+        x="year",
+        y=metric,
+        title="Yearly Evolution",
+        markers=True
+    )
+
+    # BAR – top countries in range
+    bar_data = (
+        df_filtered
+        .groupby("country")[metric]
         .sum()
         .sort_values(ascending=False)
         .head(10)
@@ -125,23 +158,16 @@ def update_charts(selected_year):
     )
 
     fig_bar = px.bar(
-        top_countries,
+        bar_data,
         x="country",
-        y="drug_deaths",
-        title=f"Top 10 Countries by Drug Deaths ({selected_year})"
+        y=metric,
+        title="Top Countries in Selected Period"
     )
 
-    # Pie
-    fig_pie = px.pie(
-        top_countries,
-        names="country",
-        values="drug_deaths",
-        title="Country Share of Deaths"
-    )
-
-    # Scatter
+    # SCATTER – rate vs deaths
     scatter_data = (
-        year_df.groupby("country")[["drug_deaths", "death_rate"]]
+        df_filtered
+        .groupby("country")[["drug_deaths", "death_rate"]]
         .mean()
         .reset_index()
     )
@@ -151,13 +177,15 @@ def update_charts(selected_year):
         x="drug_deaths",
         y="death_rate",
         hover_name="country",
-        title="Death Rate vs Total Deaths"
+        title="Death Rate vs Total Deaths",
+        size="drug_deaths"
     )
 
-    return fig_bar, fig_pie, fig_scatter, f"{total_deaths:,}"
+    return fig_trend, fig_bar, fig_scatter
+
 
 # =====================
 # RUN
 # =====================
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=8050, debug=True)
