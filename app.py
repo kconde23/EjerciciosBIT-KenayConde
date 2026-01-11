@@ -98,7 +98,7 @@ app.layout = dbc.Container(fluid=True, children=[
                         min=int(min(years)),
                         max=int(max(years)),
                         value=[int(min(years)), int(max(years))],
-                        marks={int(y): str(y) for y in years[::3]},
+                        marks={int(y): str(y) for y in years},
                         step=1
                     )
                 ])
@@ -236,3 +236,4 @@ def update_dashboard(selected_countries, metric, year_range):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
     app.run(host="0.0.0.0", port=port)
+
